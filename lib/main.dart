@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:ext_storage/ext_storage.dart';
+import 'package:open_file/open_file.dart';
+import 'Dart:io';
 
 void main() => runApp(MaterialApp(
       home: MyApp(),
@@ -15,42 +17,67 @@ class MyApp extends StatefulWidget {
 }
 
 class MyAppState extends State<MyApp> {
-  final imgUrl =
-      "https://appinfor.com.br/tecnico/webservice/pluginfile.php/88/mod_resource/content/1/Desenvolvimento%20%C3%A1gil%20de%20software.pdf?forcedownload=1&token=75dc82048f64fd9bf7956b99c08b6075";
+  final imgUrl = "url";
   bool downloading = false;
-  var progressString = "";
+  var progressString = "teste.pdf";
+  String textButton = "Download do Arquivo";
 
   @override
   void initState() {
     super.initState();
+  }
 
-    downloadFile();
+  Future<String> _getPath() {
+    return ExtStorage.getExternalStorageDirectory();
+  }
+
+  bool _veriricarArquivoExiste(String path) {
+    if (FileSystemEntity.typeSync(path) != FileSystemEntityType.notFound)
+      return true;
+    return false;
+  }
+
+  bool _abrirArquivo(String path) {
+    if (_veriricarArquivoExiste(path)) {
+      OpenFile.open(path);
+      return true;
+    }
+    return false;
   }
 
   Future<void> downloadFile() async {
     Dio dio = Dio();
-    try {
-      var dir = await getApplicationDocumentsDirectory();
+    String dir = await _getPath();
+    dir = "${dir}/arquivos/teste2.pdf";
+    if (!_veriricarArquivoExiste(dir)) {
+      try {
+        print(dir);
+        await dio.download(
+          imgUrl, dir,
+          onReceiveProgress: showDownloadProgress,
+          //Received data with List<int>
+          options: Options(
+              responseType: ResponseType.bytes,
+              followRedirects: false,
+              validateStatus: (status) {
+                return status < 500;
+              }),
+        );
+      } catch (e) {
+        print(e);
+      }
 
-      await dio.download(
-        imgUrl, "${dir.path}/teste.pdf",
-        onReceiveProgress: showDownloadProgress,
-        //Received data with List<int>
-        options: Options(
-            responseType: ResponseType.bytes,
-            followRedirects: false,
-            validateStatus: (status) {
-              return status < 500;
-            }),
-      );
-    } catch (e) {
-      print(e);
+      setState(() {
+        downloading = false;
+        //verificar se foi feito o download do arquivo
+        if (_veriricarArquivoExiste(dir)) {
+          progressString = "Download Completo";
+          textButton = "Abrir Arquivo";
+        }
+      });
+    } else {
+      _abrirArquivo(dir);
     }
-
-    setState(() {
-      downloading = false;
-      progressString = "Download Completo";
-    });
   }
 
   void showDownloadProgress(received, total) {
@@ -65,31 +92,56 @@ class MyAppState extends State<MyApp> {
       appBar: AppBar(
         title: Text("Download de Arquivo"),
       ),
-      body: Center(
-        child: downloading
-            ? Container(
-                height: 120.0,
-                width: 200.0,
-                child: Card(
+      body: Padding(
+        padding: const EdgeInsets.all(10.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text("Fazendo o Download do arquivo: $progressString",
+                style: TextStyle(
                   color: Colors.black,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      CircularProgressIndicator(),
-                      SizedBox(
-                        height: 20.0,
-                      ),
-                      Text(
-                        "Fazendo o Download do arquivo: $progressString",
-                        style: TextStyle(
-                          color: Colors.white,
+                )),
+            Center(
+              child: downloading
+                  ? Container(
+                      height: 120.0,
+                      width: 200.0,
+                      child: Card(
+                        color: Colors.black,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            CircularProgressIndicator(),
+                            SizedBox(
+                              height: 20.0,
+                            ),
+                            Text(
+                              "Fazendo o Download do arquivo: $progressString",
+                              style: TextStyle(
+                                color: Colors.white,
+                              ),
+                            )
+                          ],
                         ),
-                      )
-                    ],
-                  ),
-                ),
-              )
-            : Text("$progressString"),
+                      ),
+                    )
+                  : Padding(
+                      padding: EdgeInsets.only(top: 10.0, bottom: 10.0),
+                      child: Container(
+                        height: 50.0,
+                        child: RaisedButton(
+                          onPressed: () {
+                            downloadFile();
+                          },
+                          child: Text(textButton),
+                          color: Colors.green,
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
